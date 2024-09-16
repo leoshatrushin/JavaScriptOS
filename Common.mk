@@ -1,0 +1,16 @@
+CFLAGS := -ffreestanding \
+		-g \
+        -O0 \
+        -Wall \
+        -Wextra \
+	-Wpedantic \
+	-Werror \
+        -Wno-unused-parameter \
+        -Wno-unused-variable \
+        -I arch/x86/boot \
+        -mno-red-zone \
+        -mno-sse \
+        -mcmodel=large \
+        -fno-stack-protector \
+        -fno-pic \
+        -std=gnu23

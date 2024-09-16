@@ -1,0 +1,94 @@
+static char* pci_vendor_strings[] = {
+    [0x1234] = (char*)"QEMU",
+    [0x8086] = (char*)"Intel Corporation",
+    [0xFFFF] = (char*)"Invalid",
+};
+
+// https://pci-ids.ucw.cz/
+// https://cdecl.org/?q=declare+pci_device_strings+as+array+of+pointer+to+array+of+pointer+to+char
+static char* (*pci_device_strings[])[] = {
+    [0x1234] = (char*(*)[])&(char*[]) {
+        [0x1111] = (char*)"QEMU Virtual VGA Device",
+    },
+    [0x8086] = (char*(*)[])&(char*[]) {
+        // QEMU default
+        /*[0x1237] = (char*)"440FX - 82441FX PMC [Natoma]",*/
+        /*[0x7000] = (char*)"82371SB PIIX3 ISA [Natoma/Triton II]",*/
+        /*[0x7010] = (char*)"82371SB PIIX3 IDE [Natoma/Triton II]",*/
+        /*[0x7113] = (char*)"82371AB/EB/MB PIIX4 ACPI",*/
+        /*[0x100e] = (char*)"82540EM Gigabit Ethernet Controller",*/
+        // QEMU -machine q35
+        [0x10d3] = (char*)"82574L Gigabit Network Connection",
+        [0x2918] = (char*)"82801IB (ICH9) LPC Interface Controller",
+        [0x2922] = (char*)"82801IR/IO/IH (ICH9R/DO/DH) 6 port SATA Controller [AHCI mode]",
+        [0x2930] = (char*)"82801I (ICH9 Family) SMBus Controller",
+        [0x29c0] = (char*)"82G33/G31/P35/P31 Express DRAM Controller",
+    },
+};
+
+static char* pci_class_strings[] = {
+    [0x00] = (char*)"Legacy",
+    [0x01] = (char*)"Mass Storage Controller",
+    [0x02] = (char*)"Network Controller",
+    [0x03] = (char*)"Display Controller",
+    [0x04] = (char*)"Multimedia Controller",
+    [0x05] = (char*)"Memory Controller",
+    [0x06] = (char*)"Bridge Device",
+    [0x07] = (char*)"Simple Communication Controller",
+    [0x08] = (char*)"Base System Peripheral",
+    [0x09] = (char*)"Input Device Controller",
+    [0x0A] = (char*)"Docking Station",
+    [0x0B] = (char*)"Processor",
+    [0x0C] = (char*)"Serial Bus Controller",
+    [0x0D] = (char*)"Wireless Controller",
+    [0x0E] = (char*)"Intelligent IO Controller",
+    [0x0F] = (char*)"Satellite Communication Controller",
+    [0x10] = (char*)"Encryption Controller",
+    [0x11] = (char*)"Signal Processing Controller",
+    [0x12] = (char*)"Processing Accelerator",
+    [0x13] = (char*)"Non-Essential Instrumentation",
+    [0xFF] = (char*)"Other",
+};
+
+// https://cdecl.org/?q=declare+pci_subclass_strings+as+array+of+pointer+to+array+of+pointer+to+char
+static char* (*pci_subclass_strings[])[] = {
+    [0x01] = (char*(*)[])&(char*[]) {
+        [0x00] = (char*)"SCSI Bus Controller",
+        [0x01] = (char*)"IDE Controller",
+        [0x02] = (char*)"Floppy Disk Controller",
+        [0x03] = (char*)"IPI Bus Controller",
+        [0x04] = (char*)"RAID Controller",
+        [0x05] = (char*)"ATA Controller",
+        [0x06] = (char*)"SATA Controller",
+        [0x07] = (char*)"SAS Controller",
+        [0x08] = (char*)"NVMe Controller",
+    },
+    [0x02] = (char*(*)[])&(char*[]) {
+        [0x00] = (char*)"Ethernet Controller",
+        [0x01] = (char*)"Token Ring Controller",
+        [0x02] = (char*)"FDD Controller",
+        [0x03] = (char*)"ATM Controller",
+        [0x04] = (char*)"ISDN Controller",
+        [0x05] = (char*)"WorldFlip Controller",
+        [0x06] = (char*)"PICMG 2.14 MultiComputing Controller",
+        [0x07] = (char*)"InfiniBand Controller",
+        [0x08] = (char*)"Host Fabric Controller",
+    },
+    [0x03] = (char*(*)[])&(char*[]) {
+        [0x00] = (char*)"VGA",
+        [0x01] = (char*)"XGA",
+        [0x02] = (char*)"3D",
+    },
+    [0x06] = (char*(*)[])&(char*[]) {
+        [0x00] = (char*)"Host Bridge",
+        [0x01] = (char*)"ISA Bridge",
+        [0x04] = (char*)"PCI to PCI Bridge",
+        [0x07] = (char*)"CardBus Bridge",
+        [0x09] = (char*)"PCI to PCI Semi-Transparent Bridge",
+    },
+    [0x0C] = (char*(*)[])&(char*[]) {
+        [0x00] = (char*)"FireWire Controller",
+        [0x03] = (char*)"USB Controller",
+        [0x05] = (char*)"SMBus Controller",
+    },
+};
