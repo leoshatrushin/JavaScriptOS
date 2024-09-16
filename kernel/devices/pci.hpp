@@ -17,6 +17,9 @@ namespace PCI {
 // This mechanism is typically located in the host bridge
 // This spec specifies the mechanism for PC-AT compatible systems
 
+static constexpr u16 address_port = 0xCF8;
+static constexpr u16 data_port = 0xCFC;
+
 union config_address {
     struct {
     u8 offset; // 4-byte aligned register offset in device configuration space
@@ -34,6 +37,13 @@ union config_address {
         offset_addr.offset = offset & 0xFC;
         return offset_addr.raw;
     }
+};
+
+// https://devicehunt.com/about - stays up to date with below + extra info
+// https://pci-ids.ucw.cz/ - includes mistakes found
+// https://pcisig.com/membership/member-companies - official PCI-SIG member companies
+enum pci_vendor_id {
+    PCI_VENDOR_ID_INVALID = 0xFFFF,
 };
 
 union command_reg {
@@ -84,6 +94,33 @@ union status_reg {
     operator u16() const { return raw; }
 };
 
+// not latest version of the spec
+// https://pcisig.com/sites/default/files/files/PCI_Code-ID_r_1_11__v24_Jan_2019.pdf
+// https://pci-ids.ucw.cz/
+enum class class_code_reg {
+    Legacy = 0x00,
+    MassStorageController = 0x01,
+    NetworkController = 0x02,
+    DisplayController = 0x03,
+    MultimediaController = 0x04,
+    MemoryController = 0x05,
+    BridgeDevice = 0x06,
+    SimpleCommunicationController = 0x07,
+    BaseSystemPeripheral = 0x08,
+    InputDevice = 0x09,
+    DockingStation = 0x0A,
+    Processor = 0x0B,
+    SerialBusController = 0x0C,
+    WirelessController = 0x0D,
+    IntelligentIOController = 0x0E,
+    SatelliteCommunicationController = 0x0F,
+    EncryptionController = 0x10,
+    DataAcquisitionAndSignalProcessingController = 0x11,
+    ProcessingAccelerator = 0x12,
+    NonEssentialInstrumentation = 0x13,
+    Other = 0xFF
+};
+
 enum class __attribute__((packed)) header_type {
     GENERAL_DEVICE = 0x00,
     PCI_TO_PCI_BRIDGE = 0x01,
@@ -100,9 +137,6 @@ union header_type_reg {
     operator u8() const { return raw; }
 };
 
-static constexpr u16 address_port = 0xCF8;
-static constexpr u16 data_port = 0xCFC;
-
 // PCI is always little-endian
 // common header fields - supported by all PCI compliant devices (except listed exceptions)
 #define PCI_CONFIG_REGISTERS(X) \
@@ -113,13 +147,40 @@ static constexpr u16 data_port = 0xCFC;
     X(u8,  revision_id,     0x08)  \
     X(u8,  prog_if,         0x09)  \
     X(u8,  subclass,        0x0A)  \
-    X(u8,  class_code,      0x0B)  \
+    X(class_code_reg,  class_code,      0x0B)  \
     X(u8,  cache_line_size, 0x0C) /* 32-bit units, subject to device support, invalid behaves as 0 */ \
     X(u8,  latency_timer,   0x0D) /* optional, PCI bus block units */ \
     X(header_type_reg,  header_type,     0x0E)  \
     X(u8,  BIST,            0x0F) /* optional */ \
-    X(u8,  interrupt_line,   0x3C)  \
-    X(u8,  interrupt_pin,    0x3D)
+    X(u8,  interrupt_line,   0x3C) /* PIC interrupt */ \
+    X(u8,  interrupt_pin,    0x3D) /* I/O APIC interrupt, INTA#, INTB#, INTC#, or INTD# */
+
+#define BAR_REG_IS_IO_SPACE(bar) ((bar & 1) == 1)
+
+enum class memory_space_bar_type {
+    _32_BIT = 0x0,
+    _64_BIT = 0x2, // takes up 2 BAR slots
+};
+
+union memory_space_bar {
+    struct {
+    u8 always1 : 1;
+    enum memory_space_bar_type type : 2;
+    u8 prefetchable: 1; // w/ paging, for maximum performance, map region as WT instead of UC (uncacheable)
+                        // on x86, frame buffers are the exception, they shoudl almost always be mapped as WC
+    u32 base_addr : 1; // 16-byte aligned
+    } __attribute__((packed));
+    u32 raw;
+};
+
+union io_space_bar {
+    struct {
+    u8 always0 : 1;
+    u8 rsrv0 : 1;
+    u32 base_addr : 1; // 4-byte aligne
+    } __attribute__((packed));
+    u16 raw;
+};
 
 #define PCI_HEADER_TYPE0_CONFIG_REGISTERS(X) \
     X(u32, BAR0,             0x10)  /* Base Address Registers of additional configuration space */ \
@@ -292,33 +353,6 @@ public:
     }
 };
 
-#define BAR_REG_IS_IO_SPACE(bar) ((bar & 1) == 1)
-
-enum memory_space_bar_reg_type {
-    MEMORY_SPACE_BAR_32_BIT = 0x0,
-    MEMORY_SPACE_BAR_64_BIT = 0x2, // takes up 2 BAR slots
-};
-
-typedef union {
-    struct {
-    u8 always1 : 1;
-    enum memory_space_bar_reg_type type : 2;
-    u8 prefetchable: 1; // w/ paging, for maximum performance, map region as WT instead of UC (uncacheable)
-                        // on x86, frame buffers are the exception, they shoudl almost always be mapped as WC
-    u32 base_addr : 1; // 16-byte aligned
-    };
-    u32 raw;
-} __attribute__((packed)) memory_space_bar_reg;
-
-typedef union {
-    struct {
-    u8 always0 : 1;
-    u8 rsrv0 : 1;
-    u32 base_addr : 1; // 4-byte aligne
-    };
-    u16 raw;
-} __attribute__((packed)) io_space_bar_reg;
-
 enum __attribute__((packed)) pci_capability {
     MSI = 0x05,
     MSIX = 0x11,
@@ -370,89 +404,6 @@ typedef union {
     };
     u16 raw;
 } __attribute__((packed)) msix_table_entry;
-
-// https://devicehunt.com/about - stays up to date with below + extra info
-// https://pci-ids.ucw.cz/ - includes mistakes found
-// https://pcisig.com/membership/member-companies - official PCI-SIG member companies
-enum pci_vendor_id {
-    PCI_VENDOR_ID_INVALID = 0xFFFF,
-};
-
-enum class RegOffset {
-    VENDOR_ID = 0x00,
-    DEVICE_ID = 0x02,
-    COMMAND = 0x04,
-    STATUS = 0x06,
-    REVISION_ID = 0x08,
-    PROG_IF = 0x09,
-    SUBCLASS = 0x0A,
-    CLASS_CODE = 0x0B,
-    CACHE_LINE_SIZE = 0x0C,
-    LATENCY_TIMER = 0x0D,
-    HEADER_TYPE = 0x0E,
-    BIST = 0x0F,
-    BAR0 = 0x10, // Base Address Registers
-    BAR1 = 0x14,
-    BAR2 = 0x18,
-    BAR3 = 0x1C,
-    BAR4 = 0x20,
-    BAR5 = 0x24,
-    CARDBUS_CIS_POINTER = 0x28,
-    SUBSYSTEM_VENDOR_ID = 0x2C,
-    SUBSYSTEM_ID = 0x2E,
-    EXPANSION_ROM_BASE_ADDRESS = 0x30,
-    CAPABILITIES_POINTER = 0x34,
-    INTERRUPT_LINE = 0x3C, // PIC interrupt
-    INTERRUPT_PIN = 0x3D, // I/O APIC interrupt, INTA#, INTB#, INTC#, or INTD#
-    MIN_GRANT = 0x3E,
-    MAX_LATENCY = 0x3F,
-};
-
-enum PCI_Header_1_Reg_Offset {
-    PCI_PRIMARY_BUS_NUM_REG_OFFSET = 0x18,
-    PCI_SECONDARY_BUS_NUM_REG_OFFSET = 0x19,
-    PCI_SUBORDINATE_BUS_NUM_REG_OFFSET = 0x1A,
-    PCI_SECONDARY_LATENCY_TIMER_REG_OFFSET = 0x1B,
-    PCI_IO_BASE_REG_OFFSET = 0x1C,
-    PCI_IO_LIMIT_REG_OFFSET = 0x1D,
-    PCI_SECONDARY_STATUS_REG_OFFSET = 0x1E,
-    PCI_MEMORY_BASE_REG_OFFSET = 0x20,
-    PCI_MEMORY_LIMIT_REG_OFFSET = 0x22,
-    PCI_PREFETCHABLE_MEMORY_BASE_REG_OFFSET = 0x24,
-    PCI_PREFETCHABLE_MEMORY_LIMIT_REG_OFFSET = 0x26,
-    PCI_PREFETCHABLE_BASE_UPPER_32_BITS_REG_OFFSET = 0x28,
-    PCI_PREFETCHABLE_LIMIT_UPPER_32_BITS_REG_OFFSET = 0x2C,
-    PCI_IO_BASE_UPPER_16_BITS_REG_OFFSET = 0x30,
-    PCI_IO_LIMIT_UPPER_16_BITS_REG_OFFSET = 0x32,
-    PCI_BRIDGE_CONTROL_REG_OFFSET = 0x3E,
-};
-
-// not latest version of the spec
-// https://pcisig.com/sites/default/files/files/PCI_Code-ID_r_1_11__v24_Jan_2019.pdf
-// https://pci-ids.ucw.cz/
-enum ClassID {
-    Legacy = 0x00,
-    MassStorageController = 0x01,
-    NetworkController = 0x02,
-    DisplayController = 0x03,
-    MultimediaController = 0x04,
-    MemoryController = 0x05,
-    BridgeDevice = 0x06,
-    SimpleCommunicationController = 0x07,
-    BaseSystemPeripheral = 0x08,
-    InputDevice = 0x09,
-    DockingStation = 0x0A,
-    Processor = 0x0B,
-    SerialBusController = 0x0C,
-    WirelessController = 0x0D,
-    IntelligentIOController = 0x0E,
-    SatelliteCommunicationController = 0x0F,
-    EncryptionController = 0x10,
-    DataAcquisitionAndSignalProcessingController = 0x11,
-    ProcessingAccelerator = 0x12,
-    NonEssentialInstrumentation = 0x13,
-    Other = 0xFF
-};
 
 enum LegacySubclassID {
     Any = 0x00,
@@ -607,9 +558,3 @@ enum WirelessSubclassID {
 }
 
 void enumerate_all_pci_buses();
-u8 pci_read_register8(u8 bus, u8 device, u8 function, u8 offset);
-u16 pci_read_register16(u8 bus, u8 device, u8 function, u8 offset);
-u32 pci_read_register32(u8 bus, u8 device, u8 function, u8 offset);
-void pci_write_register8(u8 bus, u8 device, u8 function, u8 offset, u8 value);
-void pci_write_register16(u8 bus, u8 device, u8 function, u8 offset, u16 value);
-void pci_write_register32(u8 bus, u8 device, u8 function, u8 offset, u32 value);
