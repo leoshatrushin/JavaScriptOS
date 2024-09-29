@@ -48,13 +48,13 @@ typedef union {
     u8  pcd : 1;       // Page Level Cache Disable, usually 0, see PAT
     u8  accessed : 1;  // set on translation
     u8  dirty : 1;     // set on write, supposed to only apply to PT but some emulators set it on other levels
-    u8  ps : 1;        // (PDPT+PD) Page Size, translation stops and maps a 1G/2M page, 'cpuid' for 1G support
+    u8  large : 1;     // (PDPT+PD) Page Size, translation stops and maps a 1G/2M page, 'cpuid' for 1G support
                        // x86 supports mixing page sizes
                        // (PT) Page Attribute Table Index, selects PAT entry together with PWT and PCD
     u8  global : 1;    // (PT only) when CR3 is loaded or a task switch occurs, do not eject entry
                        // 'cpuid' for support
     u8  layer : 3;     // avail, OS-defined
-    u32 addr : 28;     // Table/Page base address (high bits)
+    u32 addr : 28;     // Table/Page base address (high bits 12+)
     u16 rsrv0 : 12;
     u8  avail2 : 7;
     u8  pk : 4;        // Protection Key or available, 'cpuid' for support
@@ -65,16 +65,16 @@ typedef union {
     u64 raw;
 } __attribute__((packed)) pte_t;
 
-typedef pte_t pt_t[PTE_PER_PT];
+typedef pte_t pt_t[PTE_PER_PT] __attribute__((aligned(4096)));
 
-#define PTE_ADDR(pte) ((uintptr_t)(pte)->addr << 12)
-#define VA_TO_PTE_ADDR(addr) ((uintptr_t)KV2P(addr) >> 12)
-#define PA_TO_PTE_ADDR(addr) ((uintptr_t)addr >> 12)
+#define PTE_ADDR(pte) (void*)((uintptr_t)(pte)->addr << 12)
+#define KVA_TO_PTE_ADDR(addr) (u32)((uintptr_t)KV2P(addr) >> 12)
+#define PA_TO_PTE_ADDR(addr) (u32)((uintptr_t)addr >> 12)
 
 #define PTE_LAYER(x) ((x) << 9)
 
-#define PGROUNDUP(ptr) (void*)ROUNDUP((uintptr_t)ptr, PGSIZE)
-#define PGROUNDDOWN(ptr) (void*)ROUNDDOWN((uintptr_t)ptr, PGSIZE)
+#define PGROUNDUP(ptr) (void*)ROUNDUP2N((uintptr_t)ptr, PGSIZE)
+#define PGROUNDDOWN(ptr) (void*)ROUNDDOWN2N((uintptr_t)ptr, PGSIZE)
 
 // Page fault error code
 // Describes what was attempted, not why it failed
@@ -88,10 +88,13 @@ struct pf_err {
     u32 rsrv : 27;
 } __attribute__((packed));
 
-struct cr3 {
-    u32 todo : 12;    // Change meaning depending on cr4.14, for now 0
+union cr3 {
+    struct {
+    u16 todo : 12;    // Changes meaning depending on cr4.14, for now 0
     u64 pa_pml4 : 52;
-} __attribute__((packed));
+    } __attribute__((packed));
+    u64 raw;
+};
 
 #endif // __ASSEMBLER__
 
@@ -102,3 +105,13 @@ struct cr3 {
 
 #define VA_4K(pml4, pdpt, pd, pt, offset) \
     ((pml4) << 39 | (pdpt) << 30 | (pd) << 21 | (pt) << 12 | (offset))
+
+#ifdef __cplusplus
+constexpr u64 _1GB = 1 << 30;
+constexpr u64 _2MB = 1 << 21;
+constexpr u64 _4KB = 1 << 12;
+#else
+#define _1GB (1 << 30)
+#define _2MB (1 << 21)
+#define _4KB (1 << 12)
+#endif

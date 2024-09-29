@@ -27,10 +27,7 @@ public:
         bool operator==(const Iterator& other) const {
             return (pos == other.pos) && (pathend == other.pathend);
         }
-
-        bool operator!=(const Iterator& other) const {
-            return !(*this == other);
-        }
+        bool operator!=(const Iterator& other) const { return !(*this == other); }
 
         bool is_last() const {
             return pos == pathend;

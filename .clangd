@@ -1,0 +1,26 @@
+CompileFlags:
+  Add: 
+    - -I/Users/leoshatrushin/dev/JavaScriptOS
+    - -ffreestanding
+    - -Wall
+    - -Wextra
+    - -Werror
+    - -Wno-gnu-anonymous-struct
+    - -Wno-nested-anon-types
+    - -Wno-gnu-statement-expression-from-macro-expansion
+    - -Wno-c99-extensions
+    - -Wno-missing-field-initializers
+      
+---
+If:
+  PathExclude: [.*\.c]
+CompileFlags:
+  Add:
+    - -std=c++23
+
+---
+If:
+  PathMatch: [.*\.c]
+CompileFlags:
+  Add:
+    - -std=c23

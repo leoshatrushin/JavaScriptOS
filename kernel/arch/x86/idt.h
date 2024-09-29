@@ -1,6 +1,6 @@
 #pragma once
-#include "../../libk/types.h"
-#include "segmentation.h"
+#include <kernel/libk/types.h>
+#include <kernel/arch/x86/segmentation.hpp>
 
 typedef void* isr;
 
@@ -93,7 +93,7 @@ typedef struct {
 #define APIC_TIMER_INTERRUPT_NUM     32
 #define APIC_SPURIOUS_INTERRUPT_NUM 255
 
-#define IRQ_INTERRUPT_OFFSET              32
+#define IRQ_VECTOR_BASE              32
 // defined in the chipset spec
 // https://wiki.qemu.org/Features/Q35
 // qemu-system-x86_64 (default): Intel PIIX4
@@ -107,11 +107,15 @@ typedef struct {
 #define IRQ_COM1                4 // + COM3, see https://wiki.osdev.org/Serial_Ports
                                   // idk where to find "there exists a serial port device on this chipset"
                                   // in the spec
-#define KEYBOARD_INTERRUPT_NUM       33
-#define PIT_INTERRUPT_NUM            34
+
+#define IRQ_DISK                14
+
+#define KEYBOARD_VECTOR       IRQ_VECTOR_BASE + IRQ_KEYBOARD
+#define PIT_VECTOR            IRQ_VECTOR_BASE + IRQ_PIT
+#define DISK_VECTOR           IRQ_VECTOR_BASE + IRQ_DISK
 
 
-#define SYSCALL_INTERRUPT_NUM        0x80 // used on Linux
+#define SYSCALL_VECTOR        0x80 // used on Linux
 
 
 void init_idt();

@@ -5,7 +5,7 @@ SECTIONS
     . = 1M;
 
     PROVIDE(PA_KERNEL_BEGIN = .);
-    # MUST BE THE SAME AS IN memlayout.h
+    # keep in sync with memlayout.h
     PROVIDE(KVA_KERNEL_BEGIN = 0xFFFFFFFF80000000);
 
     # must be within the first 32768 bytes of the kernel image

@@ -12,7 +12,7 @@ PIN_LOGO ?= 1
 
 TOOLPREFIX ?= x86_64-elf-
 BUILD_FOLDER ?= build
-FONT_FOLDER ?= fonts
+#FONT_FOLDER ?= fonts
 
 # Image Base Name
 

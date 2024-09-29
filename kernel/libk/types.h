@@ -11,4 +11,4 @@ typedef u64 size_t;
 typedef u64 uintptr_t;
 typedef i32 pid_t;
 typedef u8 byte;
-typedef u8 oolean;
+typedef u8 boolean;
