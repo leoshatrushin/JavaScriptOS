@@ -53,6 +53,10 @@ extern "C" void kernel_main(struct multiboot_tag* multiboot2_info, u32 magic) {
     //init_pmm();
     init_kheap();
 
+    while (true) {
+        hlt();
+    }
+
     Kernel::PCI::HostController hostController;
     for (auto device : hostController.attached_devices()) {
         debug_printf("Device class: %x\n", (u64)device.class_id().cast());

@@ -22,5 +22,4 @@ CPPFLAGS := $(CXFLAGS) \
             -std=gnu++23 \
             -Wno-missing-field-initializers \
             -fno-exceptions \
-            -fno-non-call-exceptions \
             -fno-rtti

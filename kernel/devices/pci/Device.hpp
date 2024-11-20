@@ -318,39 +318,36 @@ union x86_64_msi_message_data_reg {
 };
 
 #define ACCESSOR(type, name, offset) \
-    RegisterProxy<type> name() { return RegisterProxy<type>{base, offset}; }
+    RegisterProxy<type> name() { return RegisterProxy<type>{base_addr, offset}; }
 
 class Capability {
+protected:
+    config_space_address base_addr;
 public:
-    Capability(const config_space_address& _base) : base{_base} {}
+    Capability(const config_space_address& _base) : base_addr{_base} {}
     // TODO: cache capability_id during factory
     ACCESSOR(enum device_capability, capability_id, 0x00)
     ACCESSOR(config_space_offset, next_capability_pointer, 0x01)
-protected:
-    config_space_address base;
 };
 
 class MSIXCapability : public Capability {
 public:
     MSIXCapability(const config_space_address& _base) : Capability{_base} {}
     ACCESSOR(msix_message_control, message_control, 0x02)
-    u8 table_BIR() { return RegisterProxy<u8>{base, 0x04} & 0b111; } // BAR Indicator Register
-    u32 table_offset() { return RegisterProxy<u32>{base, 0x04} & !0b111; }
-    u8 pending_bit_array_BIR() { return RegisterProxy<u8>{base, 0x08} & 0b111; } // BAR Indicator Register
-    u32 pending_bit_array_offset() { return RegisterProxy<u32>{base, 0x08} & !0b111; }
+    u8 table_BIR() { return RegisterProxy<u8>{base_addr, 0x04} & 0b111; } // BAR Indicator Register
+    u32 table_offset() { return RegisterProxy<u32>{base_addr, 0x04} & !0b111; }
+    u8 pending_bit_array_BIR() { return RegisterProxy<u8>{base_addr, 0x08} & 0b111; } // BAR Indicator Register
+    u32 pending_bit_array_offset() { return RegisterProxy<u32>{base_addr, 0x08} & !0b111; }
 };
 
-class CapabilityFactory {
-public:
-    static Capability create(config_space_address capability_base) {
-        Capability base_config_space{capability_base};
-        auto id = base_config_space.capability_id();
-        switch (id) {
-            case device_capability::MSIX:
-                return MSIXCapability{capability_base};
-        }
+inline Capability create_capability(config_space_address capability_base) {
+    Capability base_config_space{capability_base};
+    auto id = base_config_space.capability_id();
+    switch (id) {
+        case device_capability::MSIX:
+            return MSIXCapability{capability_base};
     }
-};
+}
 
 class Capabilities {
 private:
@@ -358,27 +355,24 @@ private:
     public:
         CapabilityIterator(const config_space_address& _capability_base)
             : capability_base(_capability_base),
-              capability{Capability{capability_base}} {}
-        Capability operator*() { return capability; }
+              current_capability{Capability{capability_base}} {}
+        Capability operator*() { return current_capability; }
         CapabilityIterator& operator++() {
-            config_space_offset next_capability_offset = capability.next_capability_pointer();
+            config_space_offset next_capability_offset = current_capability.next_capability_pointer();
             if (next_capability_offset == 0) {
                 capability_base.raw = 0;
             } else {
                 capability_base.set_offset(next_capability_offset);
             }
-            capability = CapabilityFactory::create(capability_base);
+            current_capability = create_capability(capability_base);
             return *this;
         }
         bool operator==(const CapabilityIterator& other) {
             return capability_base.raw == other.capability_base.raw;
         }
-        bool operator!=(const CapabilityIterator& other) {
-            return !(*this == other);
-        }
     private:
         config_space_address capability_base;
-        Capability capability;
+        Capability current_capability;
     };
 public:
     Capabilities(const config_space_address& _first_capability_base)
@@ -392,9 +386,11 @@ private:
 // PCI is always little-endian
 // common header fields - supported by all PCI compliant devices (except listed exceptions)
 class DeviceBase {
+protected:
+    config_space_address base_addr;
 public:
-    DeviceBase(u8 bus, u8 device, u8 function) : base{bus, device, function} {}
-    DeviceBase(const config_space_address& _base) : base{_base} {}
+    DeviceBase(u8 bus, u8 device, u8 function) : base_addr{bus, device, function} {}
+    DeviceBase(config_space_address& base) : base_addr{base} {}
     ACCESSOR(enum VendorID, vendor_id, 0x00) // vendor that built the silicon
     ACCESSOR(enum DeviceID, device_id, 0x02)  
     ACCESSOR(command, command_reg, 0x04)  
@@ -412,8 +408,6 @@ public:
     virtual Capabilities capabilities() {
         return Capabilities{config_space_address{0}};
     }
-protected:
-    config_space_address base;
 };
 
 // Base Address Registers of additional configuration space
@@ -421,40 +415,36 @@ protected:
 // Some graphics devices may use one for control and another for a frame buffer
 // TODO: Make this an actual Mixin that requires having inherited from DeviceBase, not just in the hierarchy
 template<u8 max_BAR>
-class BARMixin : public DeviceBase {
+class BARMixin {
 public:
-    BARMixin(u8 bus, u8 device, u8 function) : DeviceBase{bus, device, function} {}
-    BARMixin(const config_space_address& _base) : DeviceBase{_base} {}
     RegisterProxy<BAR_t> BAR(u8 n) {
         if (n > max_BAR) {
             debug_printf("Invalid BAR index\n");
             hlt();
         }
-        return RegisterProxy<BAR_t>{this->base + (u8)(BAR0_offset + 4 * n)};
+        return RegisterProxy<BAR_t>{this->base_addr + (u8)(BAR0_offset + 4 * n)};
     }
     ErrorOr<void*> BAR_address(u8 n);
     size_t BAR_space_size(u8 n);
 };
 
-class Device : public BARMixin<5> {
+class Device : public DeviceBase, public BARMixin<5> {
 public:
-    Device(u8 bus, u8 device, u8 function) : BARMixin{bus, device, function} {}
-    Device(const config_space_address& base) : BARMixin{base} {}
+    using DeviceBase::DeviceBase;
     ACCESSOR(u32, cardbus_CIS_ptr,  0x28)
     ACCESSOR(VendorID, subsystem_vendor_id, 0x2C) // vendor that built the add-in card
     ACCESSOR(u16, subsystem_id,     0x2E)
     ACCESSOR(u32, expansion_ROM_base_addr, 0x30)
     ACCESSOR(u8,  min_grant,        0x3E)
     ACCESSOR(u8,  max_latency,      0x3F)
-    Capabilities capabilities() {
-        return Capabilities{base + 0x34};
+    Capabilities capabilities() override {
+        return Capabilities{base_addr + 0x34};
     }
 };
 
-class PCIToPCIBridge : public BARMixin<2> {
+class PCIToPCIBridge : public DeviceBase, public BARMixin<2> {
 public:
-    PCIToPCIBridge(u8 bus, u8 device, u8 function) : BARMixin{bus, device, function} {}
-    PCIToPCIBridge(const config_space_address& base) : BARMixin{base} {}
+    using DeviceBase::DeviceBase;
     ACCESSOR(u8,  primary_bus,      0x18)
     ACCESSOR(u8,  secondary_bus,    0x19)
     ACCESSOR(u8,  subordinate_bus,  0x1A)
@@ -472,15 +462,14 @@ public:
     ACCESSOR(u16, io_limit_upper,   0x32)
     ACCESSOR(u32, expansion_ROM_base_addr, 0x38)
     ACCESSOR(u16, bridge_control,   0x3E)
-    Capabilities capabilities() {
-        return Capabilities{base + 0x34};
+    Capabilities capabilities() override {
+        return Capabilities{base_addr + 0x34};
     }
 };
 
 class PCIToCardBusBridge : public DeviceBase {
 public:
-    PCIToCardBusBridge(u8 bus, u8 device, u8 function) : DeviceBase{bus, device, function} {}
-    PCIToCardBusBridge(const config_space_address& base) : DeviceBase{base} {}
+    using DeviceBase::DeviceBase;
     ACCESSOR(u32, cardbus_socket_slash_exca_base_addr, 0x10)
     ACCESSOR(u16, secondary_status,  0x16)
     ACCESSOR(u8,  pci_bus_num,       0x18)
@@ -499,29 +488,25 @@ public:
     ACCESSOR(u16, subsystem_device_id, 0x40)
     ACCESSOR(u16, subsystem_vendor_id, 0x42)
     ACCESSOR(u32, _16_bit_pc_card_legacy_mode_base_addr,   0x44)
-    Capabilities capabilities() {
-        return Capabilities{base + 0x14};
+    Capabilities capabilities() override {
+        return Capabilities{base_addr + 0x14};
     }
 };
 
-class DeviceFactory {
-public:
-    static DeviceBase create(u8 bus, u8 device, u8 function) {
-        config_space_address base{bus, device, function};
-        DeviceBase device_base{base};
-        device_header_type proxy_type = device_base.header_type();
-        // TODO: AHCIController, check vendor id and device id to really be sure
-        switch (proxy_type.type) {
-            case header_type::GENERAL_DEVICE:
-                return Device{base};
-            case header_type::PCI_TO_PCI_BRIDGE:
-                return PCIToPCIBridge{base};
-            case header_type::PCI_TO_CARDBUS_BRIDGE:
-                return PCIToCardBusBridge{base};
-        }
-        return device_base;
+inline DeviceBase create_device(u8 bus, u8 device, u8 function) {
+    config_space_address base{bus, device, function};
+    DeviceBase device_base{base};
+    device_header_type proxy_type = device_base.header_type();
+    // TODO: AHCIController, check vendor id and device id to really be sure
+    switch (proxy_type.type) {
+        case header_type::GENERAL_DEVICE:
+            return Device{base};
+        case header_type::PCI_TO_PCI_BRIDGE:
+            return PCIToPCIBridge{base};
+        case header_type::PCI_TO_CARDBUS_BRIDGE:
+            return PCIToCardBusBridge{base};
     }
-};
-
+    return device_base;
+}
 
 }

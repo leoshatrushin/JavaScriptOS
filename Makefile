@@ -58,7 +58,7 @@ default: build
 build: $(BUILD_FOLDER)/$(ISO_IMAGE_FILENAME)
 
 run: $(BUILD_FOLDER)/$(ISO_IMAGE_FILENAME)
-	qemu-system-x86_64 -cdrom $(BUILD_FOLDER)/$(ISO_IMAGE_FILENAME)
+	$(QEMU) -cdrom $(BUILD_FOLDER)/$(ISO_IMAGE_FILENAME) -machine q35 -monitor unix:qemu-monitor-socket,server,nowait -serial mon:stdio -m 1G -d int -no-reboot -no-shutdown
 
 $(BUILD_FOLDER)/$(ISO_IMAGE_FILENAME): $(BUILD_FOLDER)/kernel.bin grub.cfg
 	@echo "Creating ISO image ..."
@@ -98,7 +98,7 @@ GDBPORT = 1234
 QEMUGDB = -gdb tcp::$(GDBPORT)
 gdb: ASM_FLAGS += $(ASM_DEBUG_FLAGS)
 gdb: $(BUILD_FOLDER)/$(ISO_IMAGE_FILENAME)
-	$(QEMU) -cdrom $(BUILD_FOLDER)/$(ISO_IMAGE_FILENAME) -machine q35 -monitor unix:qemu-monitor-socket,server,nowait -serial file:javascriptos.log -debugcon stdio -m 1G -d int -no-reboot -no-shutdown -S $(QEMUGDB)
+	$(QEMU) -cdrom $(BUILD_FOLDER)/$(ISO_IMAGE_FILENAME) -machine q35 -monitor unix:qemu-monitor-socket,server,nowait -debugcon stdio -m 1G -d int -no-reboot -no-shutdown -S $(QEMUGDB)
 
 clean:
 	@echo "Cleaning build files ..."
